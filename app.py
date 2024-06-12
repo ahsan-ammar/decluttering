@@ -75,6 +75,8 @@ class TextRequest(BaseModel):
     height: Optional[int] = None
     padding_factor: float = 5.0
     blur_factor: float = 5.0
+    controlnet: Optional[str] = "mlsd"
+    controlnet_conditioning_scale: Optional[float] = 1.0
 
 def cast_to(data, cast_type):
     try:
@@ -121,13 +123,17 @@ def _stage(response):
     height = response.get('height', None)
     padding_factor = response.get('mask_padding', 0)
     blur_factor = response.get('blur_factor', 0)
+    controlnet = response.get("controlnet", "mlsd")
+    controlnet_conditioning_scale = response.get('controlnet_conditioning_scale', 1.0)
     
     # Generate image and mask using the model
-    output, mask = MODEL(
+    output, mask, control_condition_image = MODEL(
         prompt=prompt,
         negative_prompt=negative_prompt,
         image=image,
         mask_image=mask_image,
+        controlnet=controlnet,
+        controlnet_conditioning_scale=controlnet_conditioning_scale,
         load_lora=load_lora,
         num_images_per_prompt=num_images_per_prompt,
         num_inference_steps=num_inference_steps,
@@ -153,10 +159,17 @@ def _stage(response):
     Image.fromarray(mask).save('mask.jpg')
     mask = image_to_base64(mask)
     
+    # Encode mask to base64
+    if not isinstance(control_condition_image, np.ndarray):
+        control_condition_image = np.array(control_condition_image)    
+    Image.fromarray(control_condition_image).save('control.jpg')
+    control_condition_image = image_to_base64(control_condition_image)
+    
     # Prepare results dictionary
     results = {
         "result": image_strings[0],
         "mask": mask,
+        "control_condition_image": control_condition_image,
         "seed": response['seed']
     }
 
@@ -182,7 +195,9 @@ async def process_image(room_request: TextRequest,
             "width": room_request.width,
             "height": room_request.height,
             "padding_factor": room_request.padding_factor,
-            "blur_factor": room_request.blur_factor
+            "blur_factor": room_request.blur_factor,
+            "blur_factor": room_request.controlnet,
+            "blur_factor": room_request.controlnet_conditioning_scale
         }
         
         response = _stage(response)

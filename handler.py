@@ -137,13 +137,17 @@ def generate_image(job):
     height = job_input.get('height', None)
     padding_factor = job_input.get('mask_padding', 0)
     blur_factor = job_input.get('blur_factor', 0)
+    controlnet = job_input.get("controlnet", "mlsd")
+    controlnet_conditioning_scale = job_input.get('controlnet_conditioning_scale', 1.0)
     
     # Generate image and mask using the model
-    output, mask = MODEL(
+    output, mask, control_condition_image = MODEL(
         prompt=prompt,
         negative_prompt=negative_prompt,
         image=image,
         mask_image=mask_image,
+        controlnet=controlnet,
+        controlnet_conditioning_scale=controlnet_conditioning_scale,
         load_lora=load_lora,
         num_images_per_prompt=num_images_per_prompt,
         num_inference_steps=num_inference_steps,
@@ -168,11 +172,17 @@ def generate_image(job):
     Image.fromarray(mask).save('mask.jpg')
     mask = image_to_base64(mask)
     
-        
+    # Encode mask to base64
+    if not isinstance(control_condition_image, np.ndarray):
+        control_condition_image = np.array(control_condition_image)    
+    Image.fromarray(control_condition_image).save('control.jpg')
+    control_condition_image = image_to_base64(control_condition_image)
+
     # Prepare results dictionary
     results = {
         "result": image_strings[0],
         "mask": mask,
+        "control_condition_image": control_condition_image,
         "seed": job_input['seed']
     }
 
